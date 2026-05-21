@@ -1,10 +1,10 @@
 # **CONSTRUCTION RFI COPILOT**
----
+
 
 ### _bismillah alrahaman alraheem_
 
 ## CURRENT OVERVIEW
----
+
 
 ```
 construction-copilot/
@@ -41,7 +41,7 @@ construction-copilot/
 ```
 
 ## TO DO LIST [ ABSTRACT ]
----
+
 1. BACKEND
 2. HOST BACKEND ON RENDER (temporary)
 3. OCR MODEL DEVELOPMENT
