@@ -42,4 +42,3 @@ logs/*
 !storage/raw/.gitkeep
 !storage/derived/.gitkeep
 !storage/temp/.gitkeep
-!storage/logs/.gitkeep
