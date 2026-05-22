@@ -5,7 +5,19 @@ from apps.api.routes.upload import router as upload_router
 app = FastAPI(title="Construction RFI API")
 app.include_router(upload_router)
 
+# setting up logging
 
+import logging
+
+# logging at app startup
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/app.log'),  # File output
+        logging.StreamHandler()                # Console output
+    ]
+)
 
 # setting up basic routes 
 

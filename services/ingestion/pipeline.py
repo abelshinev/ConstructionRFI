@@ -1,6 +1,6 @@
 from uuid import uuid4
 from pathlib import Path
-
+from fastapi import UploadFile
 
 # import cipher, paths, filetype detection and api response
 from services.ingestion.hashing import sha256_file
@@ -12,6 +12,13 @@ from services.ingestion.storage import (
 )
 from services.ingestion.check_filetype import detect_mime_type
 from packages.shared_schemas.asset import AssetResponse
+
+
+# import logs
+import logging
+logger = logging.getLogger(__name__)
+
+# Then use it in functions:
 
 
 # define extension map to store images and pdfs accordingly
@@ -32,18 +39,23 @@ file -> res {
 
 }
 """
-def ingest_file(upload_file):
 
+def ingest_file(upload_file: UploadFile):
+    """Used to process and store a given file.
+    Args:
+        upload_file: File uploaded -> treated as an object
+    Returns:
+        AssetResponse with filled fields and storage path
+    Raises:
+        ValueError: To show presence of unsupported filetypes
+    """
     # create temp path : file -> TEMP_DIR/random_uuid4
     temp_filename = str(uuid4())
     temp_path = TEMP_DIR / temp_filename
 
-    print("TEMP PATH:", temp_path)
-
     # save the file at the temp_path
     save_temp_file(upload_file, temp_path)
-
-    print("TEMP EXISTS AFTER SAVE:", temp_path.exists())
+    logger.info(f"TEMP EXISTS AFTER SAVE: {temp_path.exists()}")
 
     # detect MIME -> file = img/pdf
     content_type = detect_mime_type(temp_path)
@@ -62,8 +74,10 @@ def ingest_file(upload_file):
         save_dir = PDF_DIR
 
     else:
+        logger.error("Failed to save file -> unsupported file type")
         temp_path.unlink(missing_ok=True)
         raise ValueError("Unsupported file type")
+        
 
     # compute sha256 hash on the file
     file_hash = sha256_file(temp_path)
@@ -76,6 +90,7 @@ def ingest_file(upload_file):
 
     if extension is None:
         temp_path.unlink(missing_ok=True)
+        logger.error("Failed to save file -> unsupported file extension")
         raise ValueError("Unsupported extension")
 
     # save final path
@@ -87,9 +102,9 @@ def ingest_file(upload_file):
     if not final_path.exists():
         temp_path.rename(final_path)
     else:
+        logger.info(f"Found duplicate for file {final_path}")
         temp_path.unlink(missing_ok=True)
 
-    # generate response
     return AssetResponse(
         filename=upload_file.filename,
         stored_path=str(final_path),
