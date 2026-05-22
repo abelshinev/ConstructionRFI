@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Pytest
+.pytest_cache/
+
+# Ruff/mypy
+.mypy_cache/
+.ruff_cache/
+
+# Build artifacts
+dist/
+build/
+
+# Storage (ignore actual assets)
+storage/raw/*
+storage/derived/*
+storage/temp/*
+
+# Keep folder structure
+!storage/raw/.gitkeep
+!storage/derived/.gitkeep
+!storage/temp/.gitkeep
