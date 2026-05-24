@@ -58,6 +58,32 @@ construction-copilot/
 4. OCR MODEL HOSTING
 5. OCR-BACKEND INTEGRATION
 
+## HOW TO REPRO 
+Step 1: Docker for Postgres and redis
+```bash
+docker compose -f .\infra\compose\docker-compose.yml up -d postgres redis minio
+```
+Step 2: Get alembic up 
+```bash
+alembic upgrade head
+```
+> NOTE: DELETE existing versions if running into authentication error with postgres and execute this command before startup 
+```bash
+alembic revision --autogenerate -m "re init database"
+```
+
+Step 3: Run uvicorn FastAPI app
+```bash
+uvicorn apps.api.main:app --reload
+```
+
+Step 4: Run Celery for monitoring `process_status` updates
+```bash
+celery -A apps.worker.main.celery_app worker --loglevel=info -P threads
+```
+
+Very soon updating to run all services using docker compose.
+
 ### DEV NOTES
 
 DECOUPLE CELERY FROM API: Create shared instance in packages/tasks. Needs Attention
