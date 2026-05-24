@@ -2,3 +2,6 @@ celery
 redis
 python-multipart
 python-magic
+sqlalchemy
+asyncpg
+python-dotenv

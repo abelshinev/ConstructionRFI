@@ -1,5 +1,6 @@
 from logging.config import fileConfig
 import os
+from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -22,8 +23,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Convert async DATABASE_URL to sync URL for migrations
+load_dotenv()  # Load environment variables from .env file
+
 database_url = os.getenv("DATABASE_URL")
+
+# Failsafe for my sanity
+if not database_url:
+    raise ValueError("DATABASE_URL is entirely missing! Check your .env file path.")
+# Convert async DATABASE_URL to sync URL for migrations
 if database_url:
     # Remove async driver (+asyncpg, +aiomysql, etc.) for synchronous migration
     sync_url = database_url.replace("+asyncpg", "").replace("+aiomysql", "").replace("+aiosqlite", "")

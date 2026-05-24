@@ -45,7 +45,7 @@ class Asset(Base):
 
     # Updated to use the strict Enum
     processing_status: Mapped[ProcessingStatus] = mapped_column(
-        Enum(ProcessingStatus), 
+        Enum(ProcessingStatus, name="processingstatus"), 
         nullable=False, 
         default=ProcessingStatus.PENDING
     )
