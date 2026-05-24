@@ -4,10 +4,12 @@ services:
     container_name: rfi_postgres
     ports:
       - "5432:5432"
+    env_file:
+      - ../../.env
     environment:
-      - POSTGRES_DB=construction_rfi
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,9 +38,11 @@ services:
       - "9000:9000"
       - "9001:9001"
     command: server /data --console-address ":9001"
+    env_file:
+      - ../../.env
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -54,6 +58,8 @@ services:
     container_name: rfi_api
     ports:
       - "8000:8000"
+    env_file:
+      - ../../.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/construction_rfi
       - REDIS_URL=redis://redis:6379/0
@@ -75,6 +81,8 @@ services:
       context: ../../
       dockerfile: infra/docker/worker.Dockerfile
     container_name: rfi_worker
+    env_file:
+      - ../../.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/construction_rfi
       - REDIS_URL=redis://redis:6379/0
