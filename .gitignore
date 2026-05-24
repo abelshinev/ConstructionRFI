@@ -41,4 +41,7 @@ logs/*
 
 # Keep folder structure
 !storage/raw/.gitkeep
+!storage/raw/images/.gitkeep
+!storage/raw/pdfs/.gitkeep
 !storage/derived/.gitkeep
+!storage/temp/.gitkeep
