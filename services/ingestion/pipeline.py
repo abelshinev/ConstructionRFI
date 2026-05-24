@@ -11,12 +11,6 @@ from services.ingestion.storage import (
     save_temp_file,
 )
 from services.ingestion.check_filetype import detect_mime_type
-from packages.shared_schemas.asset import AssetResponse
-
-# import database
-from storage.database.connect import AsyncSessionLocal
-from storage.database.models import Asset
-from sqlalchemy.exc import IntegrityError
 
 
 # import logs
@@ -46,7 +40,7 @@ file -> res {
 """
 
 # adding asynchronous file ingestion
-async def ingest_file(upload_file: UploadFile):
+async def ingest_file(upload_file: UploadFile) -> dict:
     """Used to process and store a given file.
     Args:
         upload_file: File uploaded -> treated as an object
@@ -64,8 +58,8 @@ async def ingest_file(upload_file: UploadFile):
     logger.info(f"TEMP EXISTS AFTER SAVE: {temp_path.exists()}")
 
     # detect MIME -> file = img/pdf
-    content_type = detect_mime_type(temp_path)
-    print("DETECTED MIME:", content_type)
+    content_type = await detect_mime_type(temp_path)
+    print(f"DETECTED MIME: {content_type}")
 
     """ 
     do file-type validation : 
@@ -103,51 +97,10 @@ async def ingest_file(upload_file: UploadFile):
 
     logger.debug(f"FINAL PATH: {final_path}")
 
-    # Store DB record FIRST (keep file in temp until success)
-    async with AsyncSessionLocal() as db:
-        try:
-            asset = Asset(
-                sha256=file_hash,
-                original_filename=upload_file.filename,
-                stored_path=str(final_path),
-                content_type=content_type,
-                processing_status="uploaded",
-            )
-            db.add(asset)
-            await db.commit()
-            logger.info(f"Asset record created for hash: {file_hash}")
-            
-        except IntegrityError:
-            # Duplicate hash found - clean up temp file
-            temp_path.unlink(missing_ok=True)
-            await db.rollback()
-            logger.warning(f"Duplicate asset with hash: {file_hash} found")
-            raise ValueError(f"File already exists (hash: {file_hash})")
-        
-        except Exception as e:
-            # Any other DB error - clean up temp file
-            temp_path.unlink(missing_ok=True)
-            await db.rollback()
-            logger.error(f"Database error while storing asset: {e}")
-            raise
-
-    # Move file to final location ONLY after DB commit succeeds
-    try:
-        if not final_path.exists():
-            temp_path.rename(final_path)
-            logger.info(f"File moved to: {final_path}")
-        else:
-            # File exists (edge case: parallel upload) - keep both records, clean temp
-            temp_path.unlink(missing_ok=True)
-            logger.info(f"File already exists at: {final_path}")
-            
-    except Exception as e:
-        logger.error(f"Failed to move file from temp to final location: {e}")
-        raise
-
-    return AssetResponse(
-        filename=upload_file.filename,
-        stored_path=str(final_path),
-        sha256=file_hash,
-        content_type=content_type,
-    )
+    return {
+        "temp_path": str(temp_path),
+        "final_path": str(final_path),
+        "sha256": file_hash,
+        "content_type": content_type,
+        "filename": upload_file.filename
+    }

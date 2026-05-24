@@ -9,14 +9,14 @@
 ```
 construction-copilot/
 │
-├── apps/ <- YOU ARE HERE.
-│   ├── api/                # FastAPI gateway
-│   ├── frontend/           # Next.js frontend
-│   └── worker/             # Celery/RQ workers
+├── apps/ ...
+│   ├── api/     ✓          # FastAPI gateway
+│   ├── frontend/...        # Next.js frontend
+│   └── worker/  ✓          # Celery/RQ workers
 │
 ├── services/
 │   ├── vision/
-│   ├── ocr/
+│   ├── ocr/  ... <--- in queue
 │   ├── speech/
 │   ├── retrieval/
 │   ├── agent/
@@ -27,9 +27,12 @@ construction-copilot/
 │   ├── shared-utils/
 │   └── config/
 │
-├── infra/
-│   ├── docker/
-│   ├── compose/
+├── logs/
+│   └── app.log
+│
+├── infra/ ✓
+│   ├── docker/ ✓
+│   ├── compose/ ✓
 │   ├── k8s/ (later)
 │   └── terraform/ (MUCH later)
 │
@@ -37,14 +40,24 @@ construction-copilot/
 │
 ├── docs/
 │
+├── storage/
+│   ├── database/ (!) <-- IN TESTING
+│   ├── raw/
+│   └── temp/
+│
 └── README.md
 ```
 
 ## TO DO LIST [ ABSTRACT ]
 
-1. BACKEND
-2. HOST BACKEND ON RENDER (temporary)
-3. OCR MODEL DEVELOPMENT
+1. FASTAPI BACKEND BUILD
+2. INGEST PIPELINE
+2.a Setup Postgres 
+2.b Celery Tasks 
+3. OCR MODEL DEVELOPMENT [ in progress ]
 4. OCR MODEL HOSTING
 5. OCR-BACKEND INTEGRATION
 
+### DEV NOTES
+
+DECOUPLE CELERY FROM API: Create shared instance in packages/tasks. Needs Attention

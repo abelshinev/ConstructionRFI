@@ -4,6 +4,7 @@ from celery import Celery
 from packages.shared_schemas import asset
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ProcessingStatus
+import logging
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("rfi_worker", broker=REDIS_URL, backend=REDIS_URL)
@@ -16,6 +17,9 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
 
@@ -63,7 +67,7 @@ def process_asset_task(self, asset_id: str):
 
 @celery_app.task(name="test_task")
 def test_task(x, y):
-    print(f"Executing task test_task with x={x}, y={y}", flush=True)
+    logger.info(f"Executing task test_task with x={x}, y={y}")
     return x + y
 
 if __name__ == "__main__":
