@@ -3,3 +3,8 @@ uvicorn
 pydantic
 python-multipart
 python-magic
+sqlalchemy
+asyncpg
+alembic
+python-dotenv
+psycopg2-binary
