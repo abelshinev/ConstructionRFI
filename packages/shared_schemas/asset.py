@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-
+from fastapi import UploadFile
 
 """ 
     Let AssetResponse contain :
@@ -9,7 +9,7 @@ from pydantic import BaseModel
     4. type of content
 """
 class AssetResponse(BaseModel):
-    filename: str
+    filename: str | None
     stored_path: str
     sha256: str
     content_type: str
