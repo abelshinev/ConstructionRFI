@@ -1,11 +1,17 @@
+import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from storage.database.connect import Base
 
+class ProcessingStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    READY = "READY"
+    FAILED = "FAILED"
 
 class Asset(Base):
     __tablename__ = "assets"
@@ -37,10 +43,11 @@ class Asset(Base):
         nullable=False,
     )
 
-    processing_status: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-        default="uploaded",
+    # Updated to use the strict Enum
+    processing_status: Mapped[ProcessingStatus] = mapped_column(
+        Enum(ProcessingStatus), 
+        nullable=False, 
+        default=ProcessingStatus.PENDING
     )
 
     created_at: Mapped[datetime] = mapped_column(

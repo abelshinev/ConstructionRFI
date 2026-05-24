@@ -1,9 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
 from uuid import uuid4
-from apps.api.routes.upload import router as upload_router
+from apps.api.routes import upload
 
 app = FastAPI(title="Construction RFI API")
-app.include_router(upload_router)
 
 # setting up logging
 
@@ -26,11 +25,8 @@ logging.basicConfig(
 def health_check():
     return {"status": "ok"}
 
-# 2. check upload 
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    job_id = str(uuid4())
-    return {"job_id": job_id, "filename": file.filename, "message": "File uploaded and job created"}
+# 2. check upload (routes/upload.py)'
+app.include_router(upload.router)
 
 # 3. check job status (let job_id:str -> 'status' =/!= 'processing')
 @app.get("/job/{job_id}")
