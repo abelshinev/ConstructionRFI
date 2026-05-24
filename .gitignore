@@ -37,9 +37,8 @@ storage/temp/*
 
 # Logs (ignore actual logs)
 logs/*
+!logs/.gitkeep
 
 # Keep folder structure
 !storage/raw/.gitkeep
 !storage/derived/.gitkeep
-!storage/temp/.gitkeep
-!storage/logs/.gitkeep
