@@ -14,4 +14,4 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-CMD ["celery", "-A", "apps.worker.main.app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "apps.worker.main.celery_app", "worker", "--loglevel=info"]

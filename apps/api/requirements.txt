@@ -8,3 +8,7 @@ asyncpg
 alembic
 python-dotenv
 psycopg2-binary
+
+# remove when moving to shared celery
+celery 
+redis
