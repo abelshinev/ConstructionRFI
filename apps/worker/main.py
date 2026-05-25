@@ -1,7 +1,6 @@
 import os
 import asyncio
 from celery import Celery
-from packages.shared_schemas import asset
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ProcessingStatus
 import logging
