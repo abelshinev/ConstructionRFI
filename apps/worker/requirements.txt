@@ -1,8 +1,14 @@
+# Helpers/Infra
 celery
 redis
-python-multipart
-python-magic
 sqlalchemy
 asyncpg
 python-dotenv
-pydantic
+
+# OCR
+pytesseract
+pillow
+pdfplumber
+
+# Speech
+openai-whisper
