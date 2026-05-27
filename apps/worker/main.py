@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ocr.recognition import extract_from_media  #ocr
 from services.speech.whisper import transcribe_audio
+from services.ocr.recognition import extract_from_media
 from packages.shared_schemas import asset
 
 from storage.database.connect import AsyncSessionLocal
@@ -66,6 +67,37 @@ async def process_asset_async(asset_id: str):
             elif asset.content_type.startswith("auio/"):
                 logger.info(f"Transcribing audio, File : {asset.original_filename}")
                 extracted_content = await transcribe_audio(asset_path)
+            
+            # Store extracted content in new DB table
+            if extracted_content:
+                new_extracted = ExtractedContent(
+                    asset_id=asset.id,
+                    extracted_text=extracted_content.get("text"),
+                    content_type=extracted_content.get("source"),  # 'tesseract' or 'pdfplumber'
+                    extraction_metadata={
+                        "pages": extracted_content.get("pages"),
+                        "source": extracted_content.get("source"),
+                        **extracted_content.get("metadata", {})
+                    }
+                )
+                db.add(new_extracted)
+                await db.commit()
+                logger.info(f"Extracted content stored for asset {asset_id}")
+            
+            # Update Status to Ready
+
+            # Adding OCR pipeline
+            asset_path = Path(asset.stored_path)
+            extracted_content = None
+
+            # Apply OCR based on content
+            if asset.content_type.startswith("image/"):
+                logger.info(f"Extracting text from Image: {asset.original_filename}")
+                extracted_content = await extract_from_media(asset_path)
+
+            elif asset.content_type.startswith("pdf/"):
+                logger.info(f"Extracting text from PDF: {asset.original_filename}")
+                extracted_content = await extract_from_media(asset_path)
             
             # Store extracted content in new DB table
             if extracted_content:
