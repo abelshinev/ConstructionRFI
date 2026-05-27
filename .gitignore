@@ -39,6 +39,9 @@ storage/temp/*
 logs/*
 !logs/.gitkeep
 
+# Alembic Config
+alembic.ini
+
 # Keep folder structure
 !storage/raw/.gitkeep
 !storage/raw/images/.gitkeep
