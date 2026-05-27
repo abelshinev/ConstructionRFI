@@ -1,8 +1,10 @@
 import os
 import asyncio
+import logging
 
 from pathlib import Path
 from celery import Celery
+from celery.signals import setup_logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -13,7 +15,6 @@ from packages.shared_schemas import asset
 
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ExtractedContent, ProcessingStatus
-import logging
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("rfi_worker", broker=REDIS_URL, backend=REDIS_URL)
@@ -25,9 +26,26 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    worker_hijack_root_logger=False,
 )
 
-# Set up logger
+LOG_PATH = Path("logs/app.log")
+
+
+@setup_logging.connect
+def configure_worker_logging(*args, **kwargs):
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_PATH),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
+
+
 logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
@@ -36,10 +54,14 @@ async def process_asset_async(asset_id: str):
     async with AsyncSessionLocal() as db:
         asset = await db.get(Asset, asset_id)
         if not asset:
-            print(f"Asset with ID {asset_id} not found.")
+            logger.warning("Asset with ID %s not found.", asset_id)
             return
         
-        print(f"Processing asset {asset_id} with status {asset.processing_status}")
+        logger.info(
+            "Processing asset %s with status %s",
+            asset_id,
+            asset.processing_status,
+        )
         
         try:
             # Update status to PROCESSING
@@ -128,7 +150,7 @@ async def process_asset_async(asset_id: str):
         
         except Exception as err:
             await db.rollback()
-            print(f"Error processing asset {asset_id}: {err}")
+            logger.exception("Error processing asset %s: %s", asset_id, err)
             asset.processing_status = ProcessingStatus.FAILED
             await db.commit()
             raise 
