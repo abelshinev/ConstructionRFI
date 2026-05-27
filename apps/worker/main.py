@@ -82,11 +82,11 @@ async def process_asset_async(asset_id: str):
                 logger.info(f"Extracting text from Image: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
 
-            elif asset.content_type == "application/pdf":
+            elif asset.content_type.startswith("pdf/"):
                 logger.info(f"Extracting text from PDF: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
             
-            elif asset.content_type.startswith("audio/"):
+            elif asset.content_type.startswith("auio/"):
                 logger.info(f"Transcribing audio, File : {asset.original_filename}")
                 extracted_content = await transcribe_audio(asset_path)
             
