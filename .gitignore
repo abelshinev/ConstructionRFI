@@ -51,3 +51,4 @@ alembic.ini
 
 #Ignore Redis Dump
 dump.rdb
+tests/

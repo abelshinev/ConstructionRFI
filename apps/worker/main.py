@@ -3,6 +3,11 @@ import asyncio
 
 from pathlib import Path
 from celery import Celery
+import logging
+
+from pathlib import Path
+from celery import Celery
+from celery.signals import setup_logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -17,6 +22,11 @@ from storage.database.models import Asset, ExtractedContent, ContentChunk, Proce
 from services.cleaning.cleaner import clean_extracted_text
 from services.chunking.chunker import build_chunks
 
+from services.ocr.recognition import extract_from_media
+from packages.shared_schemas import asset
+
+from storage.database.connect import AsyncSessionLocal
+from storage.database.models import Asset, ExtractedContent, ProcessingStatus
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("rfi_worker", broker=REDIS_URL, backend=REDIS_URL)
@@ -28,10 +38,28 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    worker_hijack_root_logger=False,
 )
 
 # Set up logger
 import logging
+LOG_PATH = Path("logs/app.log")
+
+
+@setup_logging.connect
+def configure_worker_logging(*args, **kwargs):
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_PATH),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
+
+
 logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
@@ -40,7 +68,7 @@ async def process_asset_async(asset_id: str):
     async with AsyncSessionLocal() as db:
         asset = await db.get(Asset, asset_id)
         if not asset:
-            print(f"Asset with ID {asset_id} not found.")
+            logger.warning("Asset with ID %s not found.", asset_id)
             return
         
         logger.info(f"Processing asset {asset_id} with status {asset.processing_status}")
