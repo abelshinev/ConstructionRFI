@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ocr.recognition import extract_from_media  #ocr
 from services.speech.whisper import transcribe_audio
-from packages.shared_schemas import asset
+
+from packages.shared_schemas.worker_input import WorkerInput
 
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ExtractedContent, ContentChunk, ProcessingStatus
@@ -64,50 +65,43 @@ logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
 
-async def process_asset_async(asset_id: str):
+async def process_asset_async(worker_input: WorkerInput):
+
+    asset_id = worker_input.asset_id
+    corr_id = worker_input.correlation_id
+
     async with AsyncSessionLocal() as db:
         asset = await db.get(Asset, asset_id)
         if not asset:
-            logger.warning("Asset with ID %s not found.", asset_id)
+            logger.warning(f"[{corr_id}] Asset with ID {asset_id} not found in DB.")
             return
         
-        logger.info(f"Processing asset {asset_id} with status {asset.processing_status}")
+        logger.info(f"[{corr_id}] Processing asset {asset_id} with status {asset.processing_status}")
         
         try:
             # Update status to PROCESSING
             asset.processing_status = ProcessingStatus.PROCESSING
             await db.commit()
             
-            # # Simulate processing time
-            # print(f"Processing asset {asset.original_filename} at {asset.stored_path}...")            
-            # await asyncio.sleep(3)  # <---  simulting ocr or vision work
-            # # ^^^ Replace with actual processing logic 
-
-            # Adding OCR + Transcription pipeline
             asset_path = Path(asset.stored_path)
             extracted_content = None
 
             # Apply OCR/Transcription based on content
             if asset.content_type.startswith("image/"):
-                logger.info(f"Extracting text from Image: {asset.original_filename}")
+                logger.info(f"[{corr_id}] Extracting text from Image: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
 
             elif asset.content_type == "application/pdf":
-                logger.info(f"Extracting text from PDF: {asset.original_filename}")
+                logger.info(f"[{corr_id}] Extracting text from PDF: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
             
             elif asset.content_type.startswith("audio/"):
-                logger.info(f"Transcribing audio, File : {asset.original_filename}")
+                logger.info(f"[{corr_id}] Transcribing audio, File : {asset.original_filename}")
                 extracted_content = await transcribe_audio(asset_path)
             
-            
-            # # Update Status to Ready
-            # logger.info(f"Extraction done! {extracted_content}")
-            # asset.processing_status = ProcessingStatus.READY
-            # await db.commit()
 
             if not extracted_content:
-                logger.warning(f"No extracted content produced for asset {asset_id}")
+                logger.warning(f"[{corr_id}] No extracted content produced for asset {asset_id}")
                 asset.processing_status = ProcessingStatus.READY
                 await db.commit()
                 return
@@ -115,6 +109,7 @@ async def process_asset_async(asset_id: str):
             raw_text = extracted_content.get("text") or ""
             cleaned_text = clean_extracted_text(str(raw_text))
             extracted_content["text"] = cleaned_text
+
             new_extracted  = ExtractedContent(
                 asset_id = asset.id,
                 extracted_text = cleaned_text,
@@ -157,7 +152,7 @@ async def process_asset_async(asset_id: str):
                 )
             await db.commit()
 
-            logger.info(f"Extraction for {asset_id} stored successfully!")
+            logger.info(f"[{corr_id}] Extraction for {asset_id} stored successfully!")
 
             # Change processing status to READY
             asset.processing_status = ProcessingStatus.READY
@@ -165,20 +160,22 @@ async def process_asset_async(asset_id: str):
 
         except Exception as err:
             await db.rollback()
-            logger.error(f"Error processing asset {asset_id}: {err}")
+            logger.error(f"[{corr_id}] Error processing asset {asset_id}: {err}")
             asset.processing_status = ProcessingStatus.FAILED
             await db.commit()
             raise 
 
 # --- SYNC CELERY TASK WRAPPER ---
 @celery_app.task(bind=True, max_retries=3)
-def process_asset_task(self, asset_id: str):
+def process_asset_task(self, payload: dict):
     """Celery task to process an asset by its ID."""
     try:
         # Bridge the sync Celery worker to the async SQLAlchemy operations
-        asyncio.run(process_asset_async(asset_id))
+        worker_input = WorkerInput.model_validate(payload)
+        asyncio.run(process_asset_async(worker_input))
     except Exception as exc:
         # Let Celery handle retries gracefully
+        logger.error(f"[{worker_input.correlation_id}] Error in process_asset_task: {exc}")
         raise self.retry(exc=exc)
 
 @celery_app.task(name="test_task")

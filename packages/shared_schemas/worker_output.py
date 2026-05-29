@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from .enums import WorkerType, WorkerStatus
 
-
+"""FORMAT FOR CELERY'S TASK INFERENCE OUTPUT """
 class WorkerOutput(BaseModel):
     asset_id: str
 

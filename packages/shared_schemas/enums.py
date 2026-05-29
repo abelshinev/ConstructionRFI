@@ -1,6 +1,9 @@
 from enum import Enum
 
 
+""" ENUMS
+Storing state, type, status as enums to ensure state consistency
+"""
 class WorkerType(str, Enum):
     IMAGE = "image"
     VISION = "vision"

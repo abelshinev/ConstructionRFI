@@ -4,8 +4,8 @@ from typing import Optional
 
 from .enums import WorkerType
 
-
 class WorkerInput(BaseModel):
+    """FORMAT FOR CELERY'S TASK INPUT """
     asset_id: str
     worker_type: WorkerType
 
