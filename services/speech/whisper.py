@@ -13,7 +13,7 @@ async def transcribe_audio(audio_path: Path) -> Dict[str, Any]:
         
     Returns:
         {
-            "transcript": str,
+            "text": str,
             "language": str,
             "duration": float,
             "source": "openai-whisper"
@@ -24,7 +24,7 @@ async def transcribe_audio(audio_path: Path) -> Dict[str, Any]:
         result = model.transcribe(str(audio_path))
         
         return {
-            "transcript": result["transcript"],
+            "text": result["text"],
             "language": result["language"],
             "segments": result["segments"],
             "source": "openai-whisper"

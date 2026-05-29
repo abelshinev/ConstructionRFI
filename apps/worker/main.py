@@ -11,8 +11,12 @@ from services.speech.whisper import transcribe_audio
 from packages.shared_schemas import asset
 
 from storage.database.connect import AsyncSessionLocal
-from storage.database.models import Asset, ExtractedContent, ProcessingStatus
-import logging
+from storage.database.models import Asset, ExtractedContent, ContentChunk, ProcessingStatus
+
+# chunking and cleaning
+from services.cleaning.cleaner import clean_extracted_text
+from services.chunking.chunker import build_chunks
+
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("rfi_worker", broker=REDIS_URL, backend=REDIS_URL)
@@ -27,6 +31,7 @@ celery_app.conf.update(
 )
 
 # Set up logger
+import logging
 logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
@@ -38,7 +43,7 @@ async def process_asset_async(asset_id: str):
             print(f"Asset with ID {asset_id} not found.")
             return
         
-        print(f"Processing asset {asset_id} with status {asset.processing_status}")
+        logger.info(f"Processing asset {asset_id} with status {asset.processing_status}")
         
         try:
             # Update status to PROCESSING
@@ -59,44 +64,80 @@ async def process_asset_async(asset_id: str):
                 logger.info(f"Extracting text from Image: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
 
-            elif asset.content_type.startswith("pdf/"):
+            elif asset.content_type == "application/pdf":
                 logger.info(f"Extracting text from PDF: {asset.original_filename}")
                 extracted_content = await extract_from_media(asset_path)
             
-            elif asset.content_type.startswith("auio/"):
+            elif asset.content_type.startswith("audio/"):
                 logger.info(f"Transcribing audio, File : {asset.original_filename}")
                 extracted_content = await transcribe_audio(asset_path)
             
-            # Store extracted content in new DB table
-            if extracted_content:
-                new_extracted = ExtractedContent(
-                    asset_id=asset.id,
-                    extracted_text=extracted_content.get("text"),
-                    content_type=extracted_content.get("source"),  # 'tesseract' or 'pdfplumber'
-                    extraction_metadata={
-                        "pages": extracted_content.get("pages"),
-                        "source": extracted_content.get("source"),
-                        **extracted_content.get("metadata", {})
-                    }
-                )
-                db.add(new_extracted)
-                await db.commit()
-                logger.info(f"Extracted content stored for asset {asset_id}")
             
-            # Update Status to Ready
+            # # Update Status to Ready
+            # logger.info(f"Extraction done! {extracted_content}")
+            # asset.processing_status = ProcessingStatus.READY
+            # await db.commit()
 
-            logger.info(f"Extraction done! {extracted_content}")
+            if not extracted_content:
+                logger.warning(f"No extracted content produced for asset {asset_id}")
+                asset.processing_status = ProcessingStatus.READY
+                await db.commit()
+                return
+            
+            raw_text = extracted_content.get("text") or ""
+            cleaned_text = clean_extracted_text(str(raw_text))
+            extracted_content["text"] = cleaned_text
+            new_extracted  = ExtractedContent(
+                asset_id = asset.id,
+                extracted_text = cleaned_text,
+                content_type = extracted_content.get("source"),
+                extraction_metadata = {
+                    "pages" : extracted_content.get("pages"),
+                    "language" : extracted_content.get("language"),
+                    "segments" : extracted_content.get("segments"),
+                    "source" : extracted_content.get("source"),
+                    "cleaning": {
+                        "pipeline": [
+                            "normalize_newlines",
+                            "remove_control_chars",
+                            "normalize_spaces",
+                            "fix_hyphenated_line_breaks",
+                            "normalize_paragraph_spacing",
+                        ]
+                    },
+                    **(extracted_content.get("metadata") or {}),
+                },
+            )
+        
+            db.add(new_extracted)
+            await db.commit()
+            await db.refresh(new_extracted)
+
+            # chunking pipeline
+            chunks = build_chunks(extracted_content, asset.content_type)
+
+            for chunk in chunks:
+                db.add(
+                    ContentChunk(
+                        asset_id = asset.id,
+                        extracted_content_id = new_extracted.id,
+                        chunk_idx = chunk.chunk_idx,
+                        text = chunk.text,
+                        chunk_type = chunk.chunk_type,
+                        chunk_metadata = chunk.chunk_metadata
+                    )
+                )
+            await db.commit()
+
+            logger.info(f"Extraction for {asset_id} stored successfully!")
+
+            # Change processing status to READY
             asset.processing_status = ProcessingStatus.READY
             await db.commit()
 
-            # # Update status to READY
-            # asset.processing_status = ProcessingStatus.READY
-            # await db.commit()
-            # print(f"Asset {asset_id} processed successfully.")
-        
         except Exception as err:
             await db.rollback()
-            print(f"Error processing asset {asset_id}: {err}")
+            logger.error(f"Error processing asset {asset_id}: {err}")
             asset.processing_status = ProcessingStatus.FAILED
             await db.commit()
             raise 

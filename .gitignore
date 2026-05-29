@@ -48,3 +48,6 @@ alembic.ini
 !storage/raw/pdfs/.gitkeep
 !storage/derived/.gitkeep
 !storage/temp/.gitkeep
+
+#Ignore Redis Dump
+dump.rdb
