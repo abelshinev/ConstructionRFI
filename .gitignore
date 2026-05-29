@@ -48,3 +48,5 @@ alembic.ini
 !storage/raw/pdfs/.gitkeep
 !storage/derived/.gitkeep
 !storage/temp/.gitkeep
+
+tests/
