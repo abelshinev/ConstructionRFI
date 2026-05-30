@@ -10,9 +10,10 @@ from celery import Celery
 from celery.signals import setup_logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-from services.ocr.recognition import extract_from_media  #ocr
+# MODELS
+from services.ocr.recognition import extract_from_media # OCR model
 from services.speech.whisper import transcribe_audio
+from services.vision.detector import run_detection # Vision model
 
 from packages.shared_schemas.worker_input import WorkerInput
 
@@ -89,6 +90,7 @@ async def process_asset_async(worker_input: WorkerInput):
             # Apply OCR/Transcription based on content
             if asset.content_type.startswith("image/"):
                 logger.info(f"[{corr_id}] Extracting text from Image: {asset.original_filename}")
+                detections = run_detection(str(asset_path))
                 extracted_content = await extract_from_media(asset_path)
 
             elif asset.content_type == "application/pdf":
