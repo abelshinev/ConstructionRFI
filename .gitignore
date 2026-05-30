@@ -52,3 +52,6 @@ alembic.ini
 #Ignore Redis Dump
 dump.rdb
 tests/
+
+# Ignore model weights 
+*.pt

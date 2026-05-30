@@ -90,8 +90,11 @@ async def process_asset_async(worker_input: WorkerInput):
             # Apply OCR/Transcription based on content
             if asset.content_type.startswith("image/"):
                 logger.info(f"[{corr_id}] Extracting text from Image: {asset.original_filename}")
-                detections = run_detection(str(asset_path))
+                geometry_data = run_detection(str(asset_path))
                 extracted_content = await extract_from_media(asset_path)
+
+                logger.info(f"[{corr_id}] Detection Complete. Found {len(geometry_data['objects'])} objects.")
+                print(f"Detection Results: {geometry_data}") # TEMP
 
             elif asset.content_type == "application/pdf":
                 logger.info(f"[{corr_id}] Extracting text from PDF: {asset.original_filename}")
