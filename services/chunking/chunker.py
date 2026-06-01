@@ -20,6 +20,18 @@ def build_chunks(extracted_content: dict[str, Any], asset_content_type: str) -> 
 
     return chunk_plain_text(extracted_content)
 
+def build_chunks_from_worker_result(worker_result: dict[str, Any]) -> list[ChunkPayload]:
+    worker_type = worker_result.get("worker_type")
+    data = worker_result.get("data") or {}
+
+    if worker_type == "pdf-data":
+        return chunk_pdf_text(data)
+
+    if worker_type == "speech-transcript":
+        return chunk_audio_transcript(data)
+
+    return []
+
 
 # Plain Text
 
@@ -66,6 +78,7 @@ def chunk_pdf_text(extracted_content: dict[str, Any]) -> list[ChunkPayload]:
             chunk_metadata={
                 "source": extracted_content.get("source"),
                 "pages": extracted_content.get("pages"),
+                "page_count": extracted_content.get("page_count"),
             },
         )
         for index, paragraph in enumerate(paragraphs)

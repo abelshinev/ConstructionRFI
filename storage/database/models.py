@@ -86,6 +86,3 @@ class ContentChunk(Base):
     chunk_metadata: Mapped[dict] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.now)
-
-
-
