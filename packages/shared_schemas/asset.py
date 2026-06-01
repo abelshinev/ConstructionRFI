@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from fastapi import UploadFile
 
 """ 
     Let AssetResponse contain :

@@ -2,6 +2,7 @@ import os
 import asyncio
 
 from pathlib import Path
+from datetime import datetime
 from celery import Celery
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,12 +11,21 @@ from services.ocr.recognition import extract_from_media  #ocr
 from services.speech.whisper import transcribe_audio
 from packages.shared_schemas import asset
 
+from packages.shared_schemas.worker_data import ImageData, PdfData, SpeechTranscript
+from packages.shared_schemas.worker_data import WorkerResult as WorkerResultSchema
+
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ExtractedContent, ContentChunk, ProcessingStatus
+from storage.database.models import (
+    Asset,
+    ContentChunk,
+    ProcessingStatus,
+    WorkerResult as WorkerResultModel,
+)
 
 # chunking and cleaning
 from services.cleaning.cleaner import clean_extracted_text
-from services.chunking.chunker import build_chunks
+from services.chunking.chunker import build_chunks, build_chunks_from_worker_result
 
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -36,6 +46,55 @@ logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
 
+# helper to run worker for corresponding asset
+async def run_worker_for_asset(asset: Asset) -> WorkerResultSchema:
+    asset_path = Path(asset.stored_path)
+
+    if asset.content_type.startswith("image/"):
+        worker_type = "image-data"
+        result = await extract_from_media(asset_path)
+
+        data = ImageData(
+            text = result.get("text", ""),
+            source = result.get("source", "tesseract"),
+            metadata = result.get("metadata") or {}
+        )
+
+    elif asset.content_type == "application/pdf":
+        worker_type = "pdf-data"
+        result = await extract_from_media(asset_path)
+
+        data = PdfData(
+            text = result.get("text", ""),
+            pages = [],
+            page_count = result.get("pages") or 0,
+            source = result.get("source", "pdfplumber"),
+            metadata = result.get("metadata") or {}
+        )
+
+    elif asset.content_type.startswith("audio/"):
+        result = await transcribe_audio(asset_path)
+        data = SpeechTranscript(
+            text = result.get("text", ""),
+            language= result.get("language"),
+            segments = result.get("segments") or [],
+            source = result.get("source", "openai-whisper"),
+            metadata = result.get("metadata") or {}
+        )
+        worker_type = "speech-transcript"
+
+    else:
+        raise ValueError(f"Unsupported content type: {asset.content_type}")
+
+    return WorkerResultSchema(
+        asset_id=asset.id,
+        worker_type=worker_type,
+        data=data,
+        confidence=None,
+        status="SUCCESS",
+        created_at=datetime.now(),
+    )
+
 async def process_asset_async(asset_id: str):
     async with AsyncSessionLocal() as db:
         asset = await db.get(Asset, asset_id)
@@ -49,78 +108,30 @@ async def process_asset_async(asset_id: str):
             # Update status to PROCESSING
             asset.processing_status = ProcessingStatus.PROCESSING
             await db.commit()
-            
-            # # Simulate processing time
-            # print(f"Processing asset {asset.original_filename} at {asset.stored_path}...")            
-            # await asyncio.sleep(3)  # <---  simulting ocr or vision work
-            # # ^^^ Replace with actual processing logic 
 
-            # Adding OCR + Transcription pipeline
-            asset_path = Path(asset.stored_path)
-            extracted_content = None
+            worker_result = await run_worker_for_asset(asset)
 
-            # Apply OCR/Transcription based on content
-            if asset.content_type.startswith("image/"):
-                logger.info(f"Extracting text from Image: {asset.original_filename}")
-                extracted_content = await extract_from_media(asset_path)
-
-            elif asset.content_type == "application/pdf":
-                logger.info(f"Extracting text from PDF: {asset.original_filename}")
-                extracted_content = await extract_from_media(asset_path)
-            
-            elif asset.content_type.startswith("audio/"):
-                logger.info(f"Transcribing audio, File : {asset.original_filename}")
-                extracted_content = await transcribe_audio(asset_path)
-            
-            
-            # # Update Status to Ready
-            # logger.info(f"Extraction done! {extracted_content}")
-            # asset.processing_status = ProcessingStatus.READY
-            # await db.commit()
-
-            if not extracted_content:
-                logger.warning(f"No extracted content produced for asset {asset_id}")
-                asset.processing_status = ProcessingStatus.READY
-                await db.commit()
-                return
-            
-            raw_text = extracted_content.get("text") or ""
-            cleaned_text = clean_extracted_text(str(raw_text))
-            extracted_content["text"] = cleaned_text
-            new_extracted  = ExtractedContent(
+            db_worker_result = WorkerResultModel(
                 asset_id = asset.id,
-                extracted_text = cleaned_text,
-                content_type = extracted_content.get("source"),
-                extraction_metadata = {
-                    "pages" : extracted_content.get("pages"),
-                    "language" : extracted_content.get("language"),
-                    "segments" : extracted_content.get("segments"),
-                    "source" : extracted_content.get("source"),
-                    "cleaning": {
-                        "pipeline": [
-                            "normalize_newlines",
-                            "remove_control_chars",
-                            "normalize_spaces",
-                            "fix_hyphenated_line_breaks",
-                            "normalize_paragraph_spacing",
-                        ]
-                    },
-                    **(extracted_content.get("metadata") or {}),
-                },
+                worker_type = worker_result.worker_type,
+                data = worker_result.data.model_dump(),
+                confidence = worker_result.confidence,
+                status = worker_result.status,
+                created_at = worker_result.created_at
             )
-        
-            db.add(new_extracted)
+
+            db.add(db_worker_result)
             await db.commit()
-            await db.refresh(new_extracted)
+            await db.refresh(db_worker_result)
 
             # chunking pipeline
-            chunks = build_chunks(extracted_content, asset.content_type)
+            chunks = build_chunks_from_worker_result(worker_result.model_dump())
 
             for chunk in chunks:
                 db.add(
                     ContentChunk(
                         asset_id = asset.id,
-                        extracted_content_id = new_extracted.id,
+                        worker_result_id = db_worker_result.id,
                         chunk_idx = chunk.chunk_idx,
                         text = chunk.text,
                         chunk_type = chunk.chunk_type,
