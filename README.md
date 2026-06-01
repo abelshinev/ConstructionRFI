@@ -16,8 +16,8 @@ construction-copilot/
 │
 ├── services/
 │   ├── vision/
-│   ├── ocr/  ... <--- in queue
-│   ├── speech/
+│   ├── ocr/  ✓
+│   ├── speech/ ✓
 │   ├── retrieval/
 │   ├── agent/
 │   └── ingestion/

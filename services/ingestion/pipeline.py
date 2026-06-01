@@ -11,7 +11,7 @@ from services.ingestion.storage import (
     save_temp_file,
 )
 from services.ingestion.check_filetype import detect_mime_type
-
+from packages.shared_schemas.ingestion import IngestionResult
 
 # import logs
 import logging
@@ -40,12 +40,12 @@ file -> res {
 """
 
 # adding asynchronous file ingestion
-async def ingest_file(upload_file: UploadFile) -> dict:
+async def ingest_file(upload_file: UploadFile) -> IngestionResult:
     """Used to process and store a given file.
     Args:
         upload_file: File uploaded -> treated as an object
     Returns:
-        AssetResponse with filled fields and storage path
+        IngestionResult with filled fields and storage path
     Raises:
         ValueError: To show presence of unsupported filetypes
     """
@@ -97,10 +97,11 @@ async def ingest_file(upload_file: UploadFile) -> dict:
 
     logger.debug(f"FINAL PATH: {final_path}")
 
-    return {
-        "temp_path": str(temp_path),
-        "final_path": str(final_path),
-        "sha256": file_hash,
-        "content_type": content_type,
-        "filename": upload_file.filename
-    }
+    return IngestionResult(
+        filename=upload_file.filename, 
+        temp_path=str(temp_path), 
+        final_path=str(final_path), 
+        sha256=file_hash, 
+        content_type=content_type
+    )
+

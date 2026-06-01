@@ -2,31 +2,33 @@ import os
 import asyncio
 
 from pathlib import Path
-from datetime import datetime
 from celery import Celery
+import logging
+
+from pathlib import Path
+from celery import Celery
+from celery.signals import setup_logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-from services.ocr.recognition import extract_from_media  #ocr
+# MODELS
+from services.ocr.recognition import extract_from_media # OCR model
 from services.speech.whisper import transcribe_audio
-from packages.shared_schemas import asset
+from services.vision.detector import run_detection # Vision model
 
-from packages.shared_schemas.worker_data import ImageData, PdfData, SpeechTranscript
-from packages.shared_schemas.worker_data import WorkerResult as WorkerResultSchema
+from packages.shared_schemas.worker_input import WorkerInput
 
 from storage.database.connect import AsyncSessionLocal
 from storage.database.models import Asset, ExtractedContent, ContentChunk, ProcessingStatus
-from storage.database.models import (
-    Asset,
-    ContentChunk,
-    ProcessingStatus,
-    WorkerResult as WorkerResultModel,
-)
 
 # chunking and cleaning
 from services.cleaning.cleaner import clean_extracted_text
-from services.chunking.chunker import build_chunks, build_chunks_from_worker_result
+from services.chunking.chunker import build_chunks
 
+from services.ocr.recognition import extract_from_media
+from packages.shared_schemas import asset
+
+from storage.database.connect import AsyncSessionLocal
+from storage.database.models import Asset, ExtractedContent, ProcessingStatus
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("rfi_worker", broker=REDIS_URL, backend=REDIS_URL)
@@ -38,100 +40,115 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    worker_hijack_root_logger=False,
 )
 
 # Set up logger
 import logging
+LOG_PATH = Path("logs/app.log")
+
+
+@setup_logging.connect
+def configure_worker_logging(*args, **kwargs):
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_PATH),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
+
+
 logger = logging.getLogger(__name__)
 
 # --- ASYNC DB LOGIC ---
 
-# helper to run worker for corresponding asset
-async def run_worker_for_asset(asset: Asset) -> WorkerResultSchema:
-    asset_path = Path(asset.stored_path)
+async def process_asset_async(worker_input: WorkerInput):
 
-    if asset.content_type.startswith("image/"):
-        worker_type = "image-data"
-        result = await extract_from_media(asset_path)
+    asset_id = worker_input.asset_id
+    corr_id = worker_input.correlation_id
 
-        data = ImageData(
-            text = result.get("text", ""),
-            source = result.get("source", "tesseract"),
-            metadata = result.get("metadata") or {}
-        )
-
-    elif asset.content_type == "application/pdf":
-        worker_type = "pdf-data"
-        result = await extract_from_media(asset_path)
-
-        data = PdfData(
-            text = result.get("text", ""),
-            pages = [],
-            page_count = result.get("pages") or 0,
-            source = result.get("source", "pdfplumber"),
-            metadata = result.get("metadata") or {}
-        )
-
-    elif asset.content_type.startswith("audio/"):
-        result = await transcribe_audio(asset_path)
-        data = SpeechTranscript(
-            text = result.get("text", ""),
-            language= result.get("language"),
-            segments = result.get("segments") or [],
-            source = result.get("source", "openai-whisper"),
-            metadata = result.get("metadata") or {}
-        )
-        worker_type = "speech-transcript"
-
-    else:
-        raise ValueError(f"Unsupported content type: {asset.content_type}")
-
-    return WorkerResultSchema(
-        asset_id=asset.id,
-        worker_type=worker_type,
-        data=data,
-        confidence=None,
-        status="SUCCESS",
-        created_at=datetime.now(),
-    )
-
-async def process_asset_async(asset_id: str):
     async with AsyncSessionLocal() as db:
         asset = await db.get(Asset, asset_id)
         if not asset:
-            print(f"Asset with ID {asset_id} not found.")
+            logger.warning(f"[{corr_id}] Asset with ID {asset_id} not found in DB.")
             return
         
-        logger.info(f"Processing asset {asset_id} with status {asset.processing_status}")
+        logger.info(f"[{corr_id}] Processing asset {asset_id} with status {asset.processing_status}")
         
         try:
             # Update status to PROCESSING
             asset.processing_status = ProcessingStatus.PROCESSING
             await db.commit()
+            
+            asset_path = Path(asset.stored_path)
+            extracted_content = None
 
-            worker_result = await run_worker_for_asset(asset)
+            # Apply OCR/Transcription based on content
+            if asset.content_type.startswith("image/"):
+                logger.info(f"[{corr_id}] Extracting text from Image: {asset.original_filename}")
+                geometry_data = run_detection(str(asset_path))
+                extracted_content = await extract_from_media(asset_path)
 
-            db_worker_result = WorkerResultModel(
+                logger.info(f"[{corr_id}] Detection Complete. Found {len(geometry_data['objects'])} objects.")
+                print(f"Detection Results: {geometry_data}") # TEMP
+
+            elif asset.content_type == "application/pdf":
+                logger.info(f"[{corr_id}] Extracting text from PDF: {asset.original_filename}")
+                extracted_content = await extract_from_media(asset_path)
+            
+            elif asset.content_type.startswith("audio/"):
+                logger.info(f"[{corr_id}] Transcribing audio, File : {asset.original_filename}")
+                extracted_content = await transcribe_audio(asset_path)
+            
+
+            if not extracted_content:
+                logger.warning(f"[{corr_id}] No extracted content produced for asset {asset_id}")
+                asset.processing_status = ProcessingStatus.READY
+                await db.commit()
+                return
+            
+            raw_text = extracted_content.get("text") or ""
+            cleaned_text = clean_extracted_text(str(raw_text))
+            extracted_content["text"] = cleaned_text
+
+            new_extracted  = ExtractedContent(
                 asset_id = asset.id,
-                worker_type = worker_result.worker_type,
-                data = worker_result.data.model_dump(),
-                confidence = worker_result.confidence,
-                status = worker_result.status,
-                created_at = worker_result.created_at
+                extracted_text = cleaned_text,
+                content_type = extracted_content.get("source"),
+                extraction_metadata = {
+                    "pages" : extracted_content.get("pages"),
+                    "language" : extracted_content.get("language"),
+                    "segments" : extracted_content.get("segments"),
+                    "source" : extracted_content.get("source"),
+                    "cleaning": {
+                        "pipeline": [
+                            "normalize_newlines",
+                            "remove_control_chars",
+                            "normalize_spaces",
+                            "fix_hyphenated_line_breaks",
+                            "normalize_paragraph_spacing",
+                        ]
+                    },
+                    **(extracted_content.get("metadata") or {}),
+                },
             )
-
-            db.add(db_worker_result)
+        
+            db.add(new_extracted)
             await db.commit()
-            await db.refresh(db_worker_result)
+            await db.refresh(new_extracted)
 
             # chunking pipeline
-            chunks = build_chunks_from_worker_result(worker_result.model_dump())
+            chunks = build_chunks(extracted_content, asset.content_type)
 
             for chunk in chunks:
                 db.add(
                     ContentChunk(
                         asset_id = asset.id,
-                        worker_result_id = db_worker_result.id,
+                        extracted_content_id = new_extracted.id,
                         chunk_idx = chunk.chunk_idx,
                         text = chunk.text,
                         chunk_type = chunk.chunk_type,
@@ -140,7 +157,7 @@ async def process_asset_async(asset_id: str):
                 )
             await db.commit()
 
-            logger.info(f"Extraction for {asset_id} stored successfully!")
+            logger.info(f"[{corr_id}] Extraction for {asset_id} stored successfully!")
 
             # Change processing status to READY
             asset.processing_status = ProcessingStatus.READY
@@ -148,20 +165,22 @@ async def process_asset_async(asset_id: str):
 
         except Exception as err:
             await db.rollback()
-            logger.error(f"Error processing asset {asset_id}: {err}")
+            logger.error(f"[{corr_id}] Error processing asset {asset_id}: {err}")
             asset.processing_status = ProcessingStatus.FAILED
             await db.commit()
             raise 
 
 # --- SYNC CELERY TASK WRAPPER ---
 @celery_app.task(bind=True, max_retries=3)
-def process_asset_task(self, asset_id: str):
+def process_asset_task(self, payload: dict):
     """Celery task to process an asset by its ID."""
     try:
         # Bridge the sync Celery worker to the async SQLAlchemy operations
-        asyncio.run(process_asset_async(asset_id))
+        worker_input = WorkerInput.model_validate(payload)
+        asyncio.run(process_asset_async(worker_input))
     except Exception as exc:
         # Let Celery handle retries gracefully
+        logger.error(f"[{worker_input.correlation_id}] Error in process_asset_task: {exc}")
         raise self.retry(exc=exc)
 
 @celery_app.task(name="test_task")
