@@ -16,10 +16,19 @@ def get_detector_model():
         logger.info("Loading RF-DETR model into memory...")
 
         # Simulate loading the model (replace with actual loading code)
-        _detector_model = RTDETR("rtdetr-l.pt")
+        cache_dir = Path("/ml-cache/ultralytics")
+
+        if cache_dir.parent.exists():
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            model_path = cache_dir / "rtdetr-l.pt"
+        else:
+            model_path = Path("rtdetr-l.pt")
+
+        _detector_model = RTDETR(str(model_path))
         logger.info("Model loaded successfully.")
     else:
         logger.info("Model already in memory, reusing it.")
+
     return _detector_model
 
 def run_detection(image_path: str | Path, confidence_threshold: float = 0.5) -> dict:

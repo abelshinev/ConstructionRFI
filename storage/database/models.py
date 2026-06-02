@@ -86,3 +86,30 @@ class ContentChunk(Base):
     chunk_metadata: Mapped[dict] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.now)
+
+class AssetOutput(Base):
+    __tablename__ = "asset_outputs"
+
+    id: Mapped[str] = mapped_column(
+        String, 
+        primary_key=True, 
+        default=lambda: str(uuid4())
+    )
+
+    asset_id: Mapped[str] = mapped_column(
+        String, ForeignKey("assets.id"), 
+        nullable=False
+    )
+
+    output_type: Mapped[str] = mapped_column(
+        String, 
+        nullable=False
+    )  # e.g., "summary", "qa-pairs"
+        
+    output_content: Mapped[dict] = mapped_column(
+        JSON, nullable=False
+    )  # structured output from LLM
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now
+    )
