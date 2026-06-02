@@ -84,6 +84,7 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
     volumes:
       - ../../storage:/app/storage
+      - ml_models_cache:/app/ml_cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,3 +97,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  ml_models_cache:

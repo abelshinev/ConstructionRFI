@@ -4,11 +4,13 @@ redis
 sqlalchemy
 asyncpg
 python-dotenv
+python-magic
+pydantic
 
 # OCR
 pytesseract
 pillow
 pdfplumber
-
+ultralytics
 # Speech
 openai-whisper

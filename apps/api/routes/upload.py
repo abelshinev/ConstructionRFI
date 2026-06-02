@@ -11,7 +11,14 @@ from storage.database.models import Asset, ProcessingStatus
 from packages.shared_schemas.worker_input import WorkerInput
 from packages.shared_schemas.enums import WorkerType
 from apps.api.dependencies import get_db
-from apps.worker.main import process_asset_task
+# from apps.worker.main import process_asset_task # Importing Celery task causes worker loading all its large packages at startup.
+
+from celery import Celery
+import os
+
+redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+celery_app = Celery("api_worker", broker=redis_url)
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,7 +78,10 @@ async def upload(file: UploadFile = File(...), db: AsyncSession = Depends(get_db
             created_at=datetime.now(timezone.utc)
         )
 
-        process_asset_task.delay(payload.model_dump()) # Uses Schematic input validation 
+        celery_app.send_task(
+            "apps.worker.main.process_asset_task", 
+            args=[payload.model_dump()] # Uses Schematic input validation
+        ) 
 
         return {
             "id": new_asset.id,
