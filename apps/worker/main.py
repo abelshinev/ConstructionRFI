@@ -18,7 +18,7 @@ from services.vision.detector import run_detection # Vision model
 from packages.shared_schemas.worker_input import WorkerInput
 
 from storage.database.connect import AsyncSessionLocal
-from storage.database.models import Asset, ExtractedContent, ContentChunk, ProcessingStatus
+from storage.database.models import Asset, AssetOutput, ExtractedContent, ContentChunk, ProcessingStatus
 
 # chunking and cleaning
 from services.cleaning.cleaner import clean_extracted_text
@@ -90,11 +90,21 @@ async def process_asset_async(worker_input: WorkerInput):
             # Apply OCR/Transcription based on content
             if asset.content_type.startswith("image/"):
                 logger.info(f"[{corr_id}] Extracting text from Image: {asset.original_filename}")
-                geometry_data = run_detection(str(asset_path))
                 extracted_content = await extract_from_media(asset_path)
 
+                geometry_data = run_detection(str(asset_path))
                 logger.info(f"[{corr_id}] Detection Complete. Found {len(geometry_data['objects'])} objects.")
                 print(f"Detection Results: {geometry_data}") # TEMP
+
+                # 2. Persist the output contract to the database
+                new_output = AssetOutput(
+                    asset_id=asset.id,
+                    worker_type="vision_geometry",
+                    data=geometry_data
+                )
+                db.add(new_output)
+                
+                logger.info(f"[{corr_id}] Geometry data persisted to DB.")
 
             elif asset.content_type == "application/pdf":
                 logger.info(f"[{corr_id}] Extracting text from PDF: {asset.original_filename}")
@@ -138,7 +148,7 @@ async def process_asset_async(worker_input: WorkerInput):
             )
         
             db.add(new_extracted)
-            await db.commit()
+            await db.commit() 
             await db.refresh(new_extracted)
 
             # chunking pipeline
@@ -161,7 +171,7 @@ async def process_asset_async(worker_input: WorkerInput):
 
             # Change processing status to READY
             asset.processing_status = ProcessingStatus.READY
-            await db.commit()
+            await db.commit() 
 
         except Exception as err:
             await db.rollback()
