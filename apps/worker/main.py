@@ -17,7 +17,7 @@ from services.vision.detector import run_detection # Vision model
 
 from packages.shared_schemas.worker_input import WorkerInput
 
-from storage.database.connect import AsyncSessionLocal
+from storage.database.connect import engine, AsyncSessionLocal
 from storage.database.models import Asset, AssetOutput, ExtractedContent, ContentChunk, ProcessingStatus
 
 # chunking and cleaning
@@ -94,13 +94,13 @@ async def process_asset_async(worker_input: WorkerInput):
 
                 geometry_data = run_detection(str(asset_path))
                 logger.info(f"[{corr_id}] Detection Complete. Found {len(geometry_data['objects'])} objects.")
-                print(f"Detection Results: {geometry_data}") # TEMP
+                logger.info(f"Detection Results: {geometry_data}") # TEMP
 
                 # 2. Persist the output contract to the database
                 new_output = AssetOutput(
                     asset_id=asset.id,
-                    worker_type="vision_geometry",
-                    data=geometry_data
+                    output_type="vision_geometry",
+                    output_content=geometry_data
                 )
                 db.add(new_output)
                 
@@ -171,7 +171,10 @@ async def process_asset_async(worker_input: WorkerInput):
 
             # Change processing status to READY
             asset.processing_status = ProcessingStatus.READY
-            await db.commit() 
+            await db.commit()
+
+            logger.info(f"[{corr_id}] Pipeline complete. Status set to READY.")
+            return str(asset.id)
 
         except Exception as err:
             await db.rollback()
@@ -179,6 +182,11 @@ async def process_asset_async(worker_input: WorkerInput):
             asset.processing_status = ProcessingStatus.FAILED
             await db.commit()
             raise 
+
+        finally:
+            logger.info(f"[{corr_id}] Finished processing asset {asset_id} with final status {asset.processing_status}")
+            await db.close()
+
 
 # --- SYNC CELERY TASK WRAPPER ---
 @celery_app.task(bind=True, max_retries=3)
@@ -188,6 +196,7 @@ def process_asset_task(self, payload: dict):
         # Bridge the sync Celery worker to the async SQLAlchemy operations
         worker_input = WorkerInput.model_validate(payload)
         asyncio.run(process_asset_async(worker_input))
+
     except Exception as exc:
         # Let Celery handle retries gracefully
         logger.error(f"[{worker_input.correlation_id}] Error in process_asset_task: {exc}")

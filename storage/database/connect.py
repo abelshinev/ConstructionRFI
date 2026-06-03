@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
+from sqlalchemy import NullPool
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -20,6 +21,7 @@ if DATABASE_URL is None:
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
+    poolclass=NullPool,  # Disable connection pooling for simplicity
 )
 
 AsyncSessionLocal = async_sessionmaker(
