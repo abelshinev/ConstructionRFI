@@ -6,30 +6,37 @@ logger = logging.getLogger(__name__)
 
 # Global variable to hold model in memory 
 _detector_model = None
-
+_ppe_model = None
+_acid_model = None
 # Home of the RF-DETR detection model
 
 def get_detector_model():
     """Lazy load model into memory once, reuse it for subsequent calls"""
-    global _detector_model
-    if _detector_model is None:
+    global _ppe_model, _acid_model
+    if _ppe_model is None or _acid_model is None:
         logger.info("Loading RF-DETR model into memory...")
 
         # Simulate loading the model (replace with actual loading code)
-        cache_dir = Path("/ml-cache/ultralytics")
+        current_dir = Path(__file__).resolve().parent
+        weights_dir = current_dir / "weights"
 
-        if cache_dir.parent.exists():
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            model_path = cache_dir / "rtdetr-l.pt"
-        else:
-            model_path = Path("rtdetr-l.pt")
+        ppe_path = weights_dir / "ppe_best.pt"
+        acid_path = weights_dir / "acid_best.pt"
 
-        _detector_model = RTDETR(str(model_path))
-        logger.info("Model loaded successfully.")
+        if not ppe_path.exists() or not acid_path.exists():
+            raise FileNotFoundError(f"Model weights not found. Ensure {ppe_path} and {acid_path} exists")
+        
+        logger.info("Loading PPE Model...")
+        _ppe_model = RTDETR(str(ppe_path))
+        
+        logger.info("Loading ACID Equipment Model...")
+        _acid_model = RTDETR(str(acid_path))
+        
+        logger.info("✅ Dual Models loaded successfully.")
     else:
-        logger.info("Model already in memory, reusing it.")
+        logger.debug("Models already in memory, reusing them.")
 
-    return _detector_model
+    return _ppe_model, _acid_model
 
 def run_detection(image_path: str | Path, confidence_threshold: float = 0.5) -> dict:
     """Execute inference using `_detector_model`"""
