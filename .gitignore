@@ -55,3 +55,4 @@ tests/
 
 # Ignore model weights 
 *.pt
+!*best.pt
