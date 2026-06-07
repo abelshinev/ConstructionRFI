@@ -69,5 +69,6 @@ def run_detection(image_path: str | Path, conf_ppe: float = 0.25, conf_acid: flo
     return {
         "models_used": ["ppe_rtdetr-l", "acid_rtdetr-l"],
         "ppe_objects": detected_ppe,
-        "equipment_objects": detected_equipment
+        "equipment_objects": detected_equipment,
+        "objects": detected_ppe + detected_equipment
     }
