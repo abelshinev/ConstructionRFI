@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.ocr.recognition import extract_from_media # OCR model
 from services.speech.whisper import transcribe_audio
 from services.vision.detector import run_detection # Vision model
+from services.vision.observation import build_observation_state
 
 from packages.shared_schemas.worker_input import WorkerInput
 
@@ -96,11 +97,14 @@ async def process_asset_async(worker_input: WorkerInput):
                 logger.info(f"[{corr_id}] Detection Complete. Found {len(geometry_data['objects'])} objects.")
                 logger.info(f"Detection Results: {geometry_data}") # TEMP
 
+                # Transform boxes into graphish state
+                observation_payload = build_observation_state(geometry_data, danger_radius=300)
+
                 # 2. Persist the output contract to the database
                 new_output = AssetOutput(
                     asset_id=asset.id,
                     output_type="vision_geometry",
-                    output_content=geometry_data
+                    output_content=observation_payload
                 )
                 db.add(new_output)
                 

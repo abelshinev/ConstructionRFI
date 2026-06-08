@@ -1,0 +1,18 @@
+
+{
+  "timestamp": "2026-06-08T11:45:51Z",
+  "camera_id": "site_cam_04",
+  "entities": [
+    {"id": "person_1", "class": "Safety Vest", "confidence": 0.88, "bbox": [100, 200, 150, 300]},
+    {"id": "equip_1", "class": "Excavator", "confidence": 0.92, "bbox": [120, 150, 400, 400]}
+  ],
+  "spatial_relationships": [
+    {
+      "source_id": "person_1",
+      "target_id": "equip_1",
+      "relationship": "IN_DANGER_ZONE",
+      "distance_pixels": 45,
+      "severity": "CRITICAL"
+    }
+  ]
+}
