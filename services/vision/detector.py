@@ -5,7 +5,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Global variable to hold model in memory 
-_detector_model = None
 _ppe_model = None
 _acid_model = None
 # Home of the RF-DETR detection model
