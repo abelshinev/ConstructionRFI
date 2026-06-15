@@ -14,7 +14,10 @@ def is_inside(inner_center: tuple, outer_bbox: List[float]) -> bool:
 
 def pixel_distance(center1: tuple, center2: tuple) -> float:
     """Calculates Euclidean distance between two points"""
-    return math.hypot(center2[0] - center1[0], center2[1] - center1[1])
+    return math.hypot(
+        center2[0] - center1[0], 
+        center2[1] - center1[1]
+    )
 
 def build_observation_state(raw_telemetry: Dict[str, Any], tracking_threshold: int = 1000) -> Dict[str, Any]:
     """
