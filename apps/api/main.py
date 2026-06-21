@@ -2,11 +2,34 @@ from fastapi import FastAPI, UploadFile, File
 from uuid import uuid4
 from apps.api.routes import upload
 
-app = FastAPI(title="Construction RFI API")
 
 # setting up logging
 
 import logging
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+app = FastAPI(title="Construction RFI API")
+
+# 1. Include your API routes FIRST
+# app.include_router(observations.router)
+
+# 2. Mount the "assets" folder containing your compiled JS/CSS
+# Assuming your React build folder is at "../frontend/dist"
+frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+
+# Serve the static assets (CSS, JS files)
+app.mount("/assets", StaticFiles(directory=f"{frontend_dist}/assets"), name="assets")
+
+# 3. Catch-all route to serve the React index.html
+# This must be at the very bottom so it doesn't override your /api routes!
+@app.get("/{catchall:path}")
+async def serve_react_app(catchall: str):
+    index_path = f"{frontend_dist}/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "Frontend build not found. Run 'npm run build' first."}
 
 # logging at app startup
 logging.basicConfig(
