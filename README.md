@@ -77,6 +77,6 @@ docker exec -it rfi_api alembic upgrade head
 alembic revision --autogenerate -m "re init database"
 ```
 
-### DEV NOTES
+### Context Graph Detail
 
-DECOUPLE CELERY FROM API: Create shared instance in packages/tasks. Needs Attention
+The Context Graph is the project's canonical world model for a single investigation session. It aggregates multimodal observations into a structured representation of the construction environment. Rather than reasoning itself, it provides the Situation Agent with a complete, session-scoped understanding of the investigation. The Situation Agent enriches this understanding with retrieved regulations, project specifications, and historical context to produce actionable recommendations, warnings, and human-readable outputs such as RFIs, compliance reports, and safety summaries.
