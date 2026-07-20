@@ -331,15 +331,7 @@ export default function App() {
             </div>
 
             {/* RAW JSON VIEW */}
-            <div>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-3 border-b border-slate-800 pb-2">Payload to Context Graph</h3>
-              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto">
-                <pre className="text-[10px] text-emerald-500/80 font-mono leading-tight">
-                  {JSON.stringify(data, null, 2)}
-                </pre>
-              </div>
-            </div>
-
+            
           </div>
         </div>
 
