@@ -11,6 +11,7 @@ from storage.database.models import Asset, ProcessingStatus
 from packages.shared_schemas.worker_input import WorkerInput
 from packages.shared_schemas.enums import WorkerType
 from apps.api.dependencies import get_db
+from services.state.state_keeper import default_state_keeper
 # from apps.worker.main import process_asset_task # Importing Celery task causes worker loading all its large packages at startup.
 
 from celery import Celery
@@ -61,6 +62,10 @@ async def upload(file: UploadFile = File(...), db: AsyncSession = Depends(get_db
         db.add(new_asset)
         await db.commit()
         await db.refresh(new_asset)
+        correlation_id = str(uuid4())
+        default_state_keeper.init_state(new_asset, correlation_id=correlation_id)
+        await default_state_keeper.persist_state(new_asset.id, db)
+        await db.commit()
 
         # Pipeline Logic Moved here
 
@@ -74,7 +79,7 @@ async def upload(file: UploadFile = File(...), db: AsyncSession = Depends(get_db
             worker_type=WorkerType.IMAGE,
             stored_path=new_asset.stored_path,
             content_type=new_asset.content_type,
-            correlation_id=str(uuid4()),
+            correlation_id=correlation_id,
             created_at=datetime.now(timezone.utc)
         )
 

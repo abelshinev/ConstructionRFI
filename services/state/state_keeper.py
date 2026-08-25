@@ -4,7 +4,9 @@ from copy import deepcopy
 from typing import Any, Protocol
 
 from packages.shared_schemas.enums import StateStatus
+from packages.shared_schemas.observation import Observation
 from packages.shared_schemas.state_schema import StateSchema
+from storage.database.models import StateRecord
 
 
 # define an Object which resembles a typical Asset object, but with only the fields that are mandatorily required for initialization
@@ -53,9 +55,51 @@ class StateKeeper:
     def get_state(self, asset_id: str) -> StateSchema | None:
         """Retrieves the current state for the input asset.
         Args:
-        
+            asset_id (str)
         """
         return self._states.get(asset_id)
+
+    async def fetch_state(self, asset_id: str, db: Any) -> StateSchema | None:
+        """Load and validate the database state before it can be changed."""
+        record = await db.get(StateRecord, asset_id)
+        if record is None:
+            return None
+
+        state = StateSchema.model_validate(
+            {
+                "asset_id": record.asset_id,
+                "filename": record.filename,
+                "content_type": record.content_type,
+                "final_path": record.final_path,
+                "created_at": record.created_at,
+                "status": record.status,
+                "correlation_id": record.correlation_id,
+                "findings": record.findings or {},
+                "errors": record.errors or [],
+            }
+        )
+        self._states[asset_id] = state
+        return state
+
+    async def persist_state(self, asset_id: str, db: Any) -> StateSchema:
+        """Validate and persist the keeper's current state as a StateRecord."""
+        state = StateSchema.model_validate(self._ensure_state(asset_id).model_dump())
+        record = await db.get(StateRecord, asset_id)
+        if record is None:
+            record = StateRecord(asset_id=asset_id)
+            db.add(record)
+
+        record.filename = state.filename
+        record.content_type = state.content_type
+        record.final_path = state.final_path
+        record.created_at = state.created_at
+        record.status = state.status
+        record.correlation_id = state.correlation_id
+        record.findings = state.findings
+        record.errors = state.errors
+        await db.flush()
+        self._states[asset_id] = state
+        return state
 
     def update_status(self, asset_id: str, status: StateStatus) -> StateSchema:
         """Update the lifecycle state of an asset."""
@@ -68,6 +112,14 @@ class StateKeeper:
         state = self._ensure_state(asset_id)
         state.findings[source] = deepcopy(payload)
         return state
+
+    def record_observation(self, observation: Observation) -> StateSchema:
+        """Record an accepted observation in the asset's authoritative state. -> To be fed into the context engine"""
+        return self.add_finding(
+            observation.source_asset_id,
+            f"observation:{observation.observation_id}",
+            observation.model_dump(mode="json"),
+        )
 
     def add_error(self, asset_id: str, error: str) -> StateSchema:
         """Append an error message to the asset state."""
@@ -87,3 +139,6 @@ class StateKeeper:
         if state is None:
             return {}
         return state.model_dump(mode="json")
+
+
+default_state_keeper = StateKeeper()

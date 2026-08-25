@@ -1,17 +1,23 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from packages.shared_schemas.observation import Observation
 from packages.shared_schemas.graph import ContextGraph
 from services.context_engine.engine import ContextGraphEngine
 from services.context_engine.repository import MemoryGraphRepository
+from services.state.state_keeper import default_state_keeper
+from apps.api.dependencies import get_db
 
 # Group these under a specific prefix
 router = APIRouter(prefix="/context", tags=["Context Graph"])
 
 # Instantiate the singleton engine using our Memory repository for now.
 # (Later, we'll swap this with PostgresGraphRepository and inject db dependency)
-engine = ContextGraphEngine(repository=MemoryGraphRepository())
+engine = ContextGraphEngine(
+    repository=MemoryGraphRepository(),
+    state_keeper=default_state_keeper,
+)
 
 class CreateSessionRequest(BaseModel):
     session_id: str
@@ -33,12 +39,12 @@ def get_graph(session_id: str):
     return graph
 
 @router.post("/observations", response_model=ContextGraph)
-def add_observation(observation: Observation):
+async def add_observation(observation: Observation, db: AsyncSession = Depends(get_db)):
     """
     Ingests a raw observation, resolves entities, updates state,
     and returns the newly updated graph.
     """
     try:
-        return engine.add_observation(observation.session_id, observation)
+        return await engine.add_observation(observation.session_id, observation)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
