@@ -1,11 +1,9 @@
 from typing import List
 
 from packages.shared_schemas.graph import ContextGraph
-from packages.shared_schemas.ontology import NodeType
 
 from .results import ActionResult, VerdictStatus
-from .rules import Rule
-
+from .rules import ConditionType, Operator, Rule
 
 class ActionEngine:
 
@@ -22,7 +20,7 @@ class ActionEngine:
 
         return results
 
-    def _evaluate_rule(
+    def _evaluate_property_rule(
         self,
         graph: ContextGraph,
         rule: Rule,
@@ -30,40 +28,71 @@ class ActionEngine:
 
         results = []
 
+        condition = rule.condition
+
+        if condition.property_name is None:
+            raise ValueError(
+                f"Property rule '{rule.rule_id}' requires a property_name."
+            )
+
         for node_id, node in graph.nodes.items():
 
             if node.type != rule.target_node_type:
                 continue
 
-            if not rule.property_name:
-                continue
-
             actual_value = getattr(
                 node.properties,
-                rule.property_name,
+                condition.property_name,
                 None
             )
 
-            if actual_value == rule.expected_value:
-                status = VerdictStatus.PASS
+            if condition.operator.value == "EQUALS":
+                passed = actual_value == condition.expected_value
+
+            elif condition.operator.value == "NOT_EQUALS":
+                passed = actual_value != condition.expected_value
+
             else:
-                status = VerdictStatus.FAIL
+                raise ValueError(
+                    f"Unsupported operator for property rule: "
+                    f"{condition.operator}"
+                )
 
             results.append(
                 ActionResult(
                     rule_id=rule.rule_id,
                     finding_type=rule.finding_type,
-                    status=status,
+                    status=(
+                        VerdictStatus.PASS
+                        if passed
+                        else VerdictStatus.FAIL
+                    ),
                     severity=rule.severity,
                     subject_node_id=node_id,
                     evidence=[
-                        f"{rule.property_name}={actual_value}"
+                        f"{condition.property_name}={actual_value}"
                     ],
                     metadata={
-                        "expected_value": rule.expected_value,
+                        "expected_value": condition.expected_value,
                         "actual_value": actual_value,
+                        "operator": condition.operator.value,
                     },
                 )
             )
 
         return results
+
+    def _evaluate_rule(self, graph: ContextGraph, rule: Rule,) -> List[ActionResult]:
+
+        if rule.condition.type == ConditionType.PROPERTY:
+            return self._evaluate_property_rule(graph, rule)
+
+        if rule.condition.type == ConditionType.MEASUREMENT:
+            return self._evaluate_measurement_rule(graph, rule)
+
+        if rule.condition.type == ConditionType.RELATIONSHIP:
+            return self._evaluate_relationship_rule(graph, rule)
+
+        raise ValueError(
+            f"Unsupported condition type: {rule.condition.type}"
+        )
