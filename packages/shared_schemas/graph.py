@@ -49,6 +49,8 @@ class GraphEdge(BaseModel):
     source: UUID
     target: UUID
     relationship: RelationshipType
+    measurements: dict[str, float] = Field(default_factory=dict)
+
     provenance_history: List[Provenance] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
