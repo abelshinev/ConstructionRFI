@@ -1,4 +1,5 @@
 from packages.shared_schemas.ontology import NodeType
+from packages.shared_schemas.ontology import NodeType, RelationshipType
 
 from .results import Severity
 from .rules import (
@@ -33,6 +34,21 @@ SAMPLE_KNOWLEDGE_BASE = [
             property_name="vest",
             operator=Operator.EQUALS,
             expected_value=True,
+        ),
+    ),
+    Rule(
+        rule_id="EQUIPMENT_CLEARANCE_TEST",
+        finding_type="EQUIPMENT_PROXIMITY",
+        severity=Severity.HIGH,
+        target_node_type=NodeType.WORKER,
+        condition=RuleCondition(
+            type=ConditionType.MEASUREMENT,
+            related_node_type=NodeType.EQUIPMENT,
+            relationship=RelationshipType.NEAR,
+            measurement_name="distance_pixels",
+            operator=Operator.GREATER_THAN_OR_EQUAL,
+            threshold=100.0,
+            unit="pixels",
         ),
     ),
 ]
