@@ -14,7 +14,7 @@ class ConditionType(str, Enum):
     MEASUREMENT = "MEASUREMENT"
 
 
-class Operator(str, Enum):
+class ComparisonOperator(str, Enum):
     EQUALS = "EQUALS"
     NOT_EQUALS = "NOT_EQUALS"
     GREATER_THAN = "GREATER_THAN"
@@ -23,17 +23,25 @@ class Operator(str, Enum):
     LESS_THAN_OR_EQUAL = "LESS_THAN_OR_EQUAL"
 
 
+class RelationshipOperator(str, Enum):
+    EXISTS = "EXISTS"
+    NOT_EXISTS = "NOT_EXISTS"
+
+
 class RuleCondition(BaseModel):
     type: ConditionType
 
+    # Property / measurement comparisons
+    operator: Optional[ComparisonOperator] = None
+    expected_value: Optional[Any] = None
+
     # Property conditions
     property_name: Optional[str] = None
-    operator: Operator = Operator.EQUALS
-    expected_value: Optional[Any] = None
 
     # Relationship conditions
     related_node_type: Optional[NodeType] = None
     relationship: Optional[RelationshipType] = None
+    relationship_operator: Optional[RelationshipOperator] = None
 
     # Measurement conditions
     measurement_name: Optional[str] = None
