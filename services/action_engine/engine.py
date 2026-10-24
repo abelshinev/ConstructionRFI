@@ -2,8 +2,9 @@ from typing import List
 
 from packages.shared_schemas.graph import ContextGraph
 
-from .results import ActionResult, VerdictStatus
+from .results import ActionResult, VerdictStatus, Finding
 from .rules import ConditionType, ComparisonOperator, RelationshipOperator, Rule
+from .aggregator import aggregate_findings
 
 from .evaluators.property import evaluate_property
 from .evaluators.measurement import evaluate_measurement
@@ -23,6 +24,10 @@ class ActionEngine:
             )
 
         return results
+
+    def evaluate_findings(self, graph: ContextGraph) -> List[Finding]:
+        results = self.evaluate(graph)
+        return aggregate_findings(results)
 
     
     def _evaluate_rule(self, graph: ContextGraph, rule: Rule,) -> List[ActionResult]:

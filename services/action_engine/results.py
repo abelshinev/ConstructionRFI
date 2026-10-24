@@ -41,3 +41,25 @@ class ActionResult(BaseModel):
     evidence: List[str] = Field(default_factory=list)
 
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Finding(BaseModel):
+    """
+    Consolidated finding derived from one or more ActionResults.
+
+    This object represents WHAT was found, independently of
+    how the finding will be communicated.
+    """
+
+    finding_type: str
+    status: VerdictStatus
+    severity: Optional[Severity] = None
+
+    subject_node_id: Optional[UUID] = None
+    related_node_ids: List[UUID] = Field(default_factory=list)
+
+    rule_ids: List[str] = Field(default_factory=list)
+
+    measurements: Dict[str, Any] = Field(default_factory=dict)
+    evidence: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
