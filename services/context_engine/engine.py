@@ -85,12 +85,19 @@ class ContextGraphEngine:
 
             if existing_edge:
                 existing_edge.provenance_history.append(new_prov)
+                if obs_edge.distance_pixels is not None:
+                    existing_edge.measurements["distance_pixels"] = obs_edge.distance_pixels
                 existing_edge.updated_at = datetime.now(UTC)
             else:
                 graph_edge = GraphEdge(
                     source=source_uuid,
                     target=target_uuid,
                     relationship=obs_edge.relationship,
+                    measurements=(
+                        {"distance_pixels": obs_edge.distance_pixels}
+                        if obs_edge.distance_pixels is not None
+                        else {}
+                    ),
                     provenance_history=[new_prov]
                 )
                 graph.edges.append(graph_edge)
